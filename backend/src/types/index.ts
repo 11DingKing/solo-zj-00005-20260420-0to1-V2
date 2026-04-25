@@ -15,6 +15,19 @@ export interface ChatRoom {
   createdAt: Date;
 }
 
+export interface RoomLastMessage {
+  id: string;
+  content: string;
+  nickname: string;
+  timestamp: Date;
+}
+
+export interface ChatRoomWithDetails extends ChatRoom {
+  onlineUsers: number;
+  lastMessage?: RoomLastMessage;
+  unreadCount: number;
+}
+
 export interface Message {
   id: string;
   roomId: string;
@@ -36,15 +49,15 @@ export interface JWTPayload {
   nickname: string;
 }
 
-export type WebSocketMessage = 
-  | { type: 'join'; roomId: string }
-  | { type: 'leave'; roomId: string }
-  | { type: 'message'; roomId: string; content: string; tempId?: string }
-  | { type: 'typing'; roomId: string; isTyping: boolean };
+export type WebSocketMessage =
+  | { type: "join"; roomId: string }
+  | { type: "leave"; roomId: string }
+  | { type: "message"; roomId: string; content: string; tempId?: string }
+  | { type: "typing"; roomId: string; isTyping: boolean };
 
 export type WebSocketResponse =
-  | { type: 'message_ack'; tempId: string; success: boolean; message?: Message }
-  | { type: 'new_message'; message: Message }
-  | { type: 'users_update'; users: OnlineUser[] }
-  | { type: 'history'; messages: Message[] }
-  | { type: 'error'; message: string };
+  | { type: "message_ack"; tempId: string; success: boolean; message?: Message }
+  | { type: "new_message"; message: Message }
+  | { type: "users_update"; users: OnlineUser[] }
+  | { type: "history"; messages: Message[] }
+  | { type: "error"; message: string };

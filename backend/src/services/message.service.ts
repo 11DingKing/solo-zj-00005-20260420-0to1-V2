@@ -5,6 +5,13 @@ import type { Message } from '../types';
 
 const CACHED_MESSAGE_COUNT = 100;
 
+export interface RoomLastMessage {
+  id: string;
+  content: string;
+  nickname: string;
+  timestamp: Date;
+}
+
 export class MessageService {
   async saveMessage(
     roomId: string,
@@ -36,6 +43,14 @@ export class MessageService {
     await redis.lPush(cacheKey, JSON.stringify(message));
     await redis.lTrim(cacheKey, 0, CACHED_MESSAGE_COUNT - 1);
 
+    const lastMessage: RoomLastMessage = {
+      id: message.id,
+      content: message.content,
+      nickname: message.nickname,
+      timestamp: message.timestamp
+    };
+    await redis.set(REDIS_KEYS.roomLastMessage(roomId), JSON.stringify(lastMessage));
+
     console.log(`[MessageService] Message saved successfully: ${message.id}`);
     return message;
   }
@@ -54,6 +69,66 @@ export class MessageService {
 
   async getMessagesByPage(roomId: string, before: Date, limit: number = 50): Promise<Message[]> {
     return this.getMessagesFromDB(roomId, 0, limit, before);
+  }
+
+  async getLastMessage(roomId: string): Promise<RoomLastMessage | null> {
+    const redis = getRedis();
+    const cached = await redis.get(REDIS_KEYS.roomLastMessage(roomId));
+    
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      return {
+        ...parsed,
+        timestamp: new Date(parsed.timestamp)
+      };
+    }
+
+    const db = getMongoDB();
+    const messagesCollection = db.collection<Message>('messages');
+    
+    const lastMessage = await messagesCollection
+      .find({ roomId })
+      .sort({ timestamp: -1 })
+      .limit(1)
+      .toArray();
+
+    if (lastMessage.length > 0) {
+      const result: RoomLastMessage = {
+        id: lastMessage[0].id,
+        content: lastMessage[0].content,
+        nickname: lastMessage[0].nickname,
+        timestamp: lastMessage[0].timestamp
+      };
+      await redis.set(REDIS_KEYS.roomLastMessage(roomId), JSON.stringify(result));
+      return result;
+    }
+
+    return null;
+  }
+
+  async getUnreadCount(roomId: string, userId: string): Promise<number> {
+    const redis = getRedis();
+    const lastReadKey = REDIS_KEYS.userLastRead(userId, roomId);
+    const lastReadStr = await redis.get(lastReadKey);
+
+    const db = getMongoDB();
+    const messagesCollection = db.collection<Message>('messages');
+
+    let query: any = { roomId, userId: { $ne: userId } };
+    
+    if (lastReadStr) {
+      const lastRead = new Date(lastReadStr);
+      query.timestamp = { $gt: lastRead };
+    }
+
+    const count = await messagesCollection.countDocuments(query);
+    return count;
+  }
+
+  async updateUserLastRead(roomId: string, userId: string, timestamp: Date): Promise<void> {
+    const redis = getRedis();
+    const lastReadKey = REDIS_KEYS.userLastRead(userId, roomId);
+    await redis.set(lastReadKey, timestamp.toISOString());
   }
 
   private async getMessagesFromDB(

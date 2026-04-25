@@ -58,7 +58,23 @@ export default function LobbyPage() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleString('zh-CN');
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return '刚刚';
+    if (diffMins < 60) return `${diffMins}分钟前`;
+    if (diffHours < 24) return `${diffHours}小时前`;
+    if (diffDays < 7) return `${diffDays}天前`;
+    
+    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  };
+
+  const truncateContent = (content: string, maxLength: number = 30) => {
+    if (content.length <= maxLength) return content;
+    return content.substring(0, maxLength) + '...';
   };
 
   return (
@@ -98,27 +114,58 @@ export default function LobbyPage() {
             暂无聊天室，点击上方按钮创建第一个房间！
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-3">
             {rooms.map((room) => (
               <div
                 key={room.id}
                 onClick={() => enterRoom(room)}
-                className="bg-white rounded-lg shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow"
+                className="bg-white rounded-lg shadow-sm p-4 cursor-pointer hover:shadow-md transition-shadow flex items-center gap-4"
               >
-                <div className="flex justify-between items-start mb-3">
-                  <h3 className="text-lg font-semibold text-gray-800 truncate">{room.name}</h3>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    room.onlineUsers > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {room.onlineUsers} 在线
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-bold text-lg">
+                    {room.name.charAt(0).toUpperCase()}
                   </span>
                 </div>
-                {room.description && (
-                  <p className="text-gray-600 text-sm mb-3 line-clamp-2">{room.description}</p>
-                )}
-                <div className="flex justify-between items-center text-xs text-gray-500">
-                  <span>最大人数: {room.maxUsers}</span>
-                  <span>{formatDate(room.createdAt)}</span>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-base font-semibold text-gray-800 truncate">{room.name}</h3>
+                    <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
+                      {room.lastMessage 
+                        ? formatDate(room.lastMessage.timestamp) 
+                        : formatDate(room.createdAt)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-500 truncate">
+                      {room.lastMessage ? (
+                        <span>
+                          <span className="text-gray-600 font-medium">{room.lastMessage.nickname}</span>
+                          : {truncateContent(room.lastMessage.content)}
+                        </span>
+                      ) : (
+                        room.description || '暂无消息'
+                      )}
+                    </p>
+
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                        room.onlineUsers > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          room.onlineUsers > 0 ? 'bg-green-500' : 'bg-gray-400'
+                        }`}></span>
+                        {room.onlineUsers} 在线
+                      </span>
+
+                      {room.unreadCount > 0 && (
+                        <span className="inline-flex items-center justify-center w-5 h-5 bg-red-500 text-white text-xs font-medium rounded-full">
+                          {room.unreadCount > 99 ? '99+' : room.unreadCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}

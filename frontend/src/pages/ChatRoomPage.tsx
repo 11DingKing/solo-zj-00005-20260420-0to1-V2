@@ -22,7 +22,8 @@ export default function ChatRoomPage() {
     sendMessage,
     resendMessage,
     loadOlderMessages,
-    initWebSocketHandlers
+    initWebSocketHandlers,
+    markMessagesRead
   } = useChatStore();
 
   const [inputValue, setInputValue] = useState('');
@@ -31,34 +32,72 @@ export default function ChatRoomPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [prevMessagesLength, setPrevMessagesLength] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const prevMessagesRef = useRef<number>(0);
+  const scrollPositionRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
 
   const roomData = location.state?.room as ChatRoom | undefined;
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({ behavior });
     }
   }, []);
 
   useEffect(() => {
-    if (isAtBottom && messages.length > prevMessagesLength) {
-      scrollToBottom();
+    if (messages.length === 0) {
+      prevMessagesRef.current = 0;
+      return;
     }
-    setPrevMessagesLength(messages.length);
-  }, [messages, isAtBottom, prevMessagesLength, scrollToBottom]);
+
+    const newMessages = messages.length - prevMessagesRef.current;
+    
+    if (newMessages > 0) {
+      if (isAtBottom) {
+        scrollToBottom(newMessages > 3 ? 'auto' : 'smooth');
+        setUnreadCount(0);
+      } else {
+        const hasIncomingMessage = messages.some((m, idx) => 
+          idx >= prevMessagesRef.current && m.userId !== user?.id
+        );
+        if (hasIncomingMessage) {
+          setUnreadCount(prev => prev + 1);
+        }
+      }
+    }
+    
+    prevMessagesRef.current = messages.length;
+  }, [messages, isAtBottom, user?.id, scrollToBottom]);
 
   const handleScroll = useCallback(() => {
     if (!messagesContainerRef.current) return;
 
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
     const atBottom = scrollHeight - scrollTop - clientHeight < 50;
-    setIsAtBottom(atBottom);
+    
+    if (atBottom && !isAtBottom) {
+      setIsAtBottom(true);
+      setUnreadCount(0);
+      markMessagesRead();
+    } else if (!atBottom && isAtBottom) {
+      setIsAtBottom(false);
+    }
 
     if (scrollTop === 0 && hasMoreMessages && !isLoadingMessages && roomId) {
-      loadOlderMessages(roomId);
+      scrollPositionRef.current = { scrollTop, scrollHeight };
+      loadOlderMessages(roomId).then((loadedCount) => {
+        if (loadedCount > 0 && messagesContainerRef.current && scrollPositionRef.current) {
+          requestAnimationFrame(() => {
+            if (messagesContainerRef.current) {
+              const newScrollHeight = messagesContainerRef.current.scrollHeight;
+              const heightDiff = newScrollHeight - scrollPositionRef.current!.scrollHeight;
+              messagesContainerRef.current.scrollTop = scrollPositionRef.current!.scrollTop + heightDiff;
+            }
+          });
+        }
+      });
     }
-  }, [hasMoreMessages, isLoadingMessages, roomId, loadOlderMessages]);
+  }, [hasMoreMessages, isLoadingMessages, roomId, loadOlderMessages, isAtBottom, markMessagesRead]);
 
   useEffect(() => {
     const removeHandler = initWebSocketHandlers();
@@ -106,6 +145,8 @@ export default function ChatRoomPage() {
 
     sendMessage(inputValue.trim(), user.id, user.nickname);
     setInputValue('');
+    setIsAtBottom(true);
+    setUnreadCount(0);
   };
 
   const formatTime = (timestamp: string) => {
@@ -116,6 +157,13 @@ export default function ChatRoomPage() {
   const handleBack = () => {
     leaveRoom();
     navigate('/');
+  };
+
+  const handleJumpToBottom = () => {
+    scrollToBottom('smooth');
+    setIsAtBottom(true);
+    setUnreadCount(0);
+    markMessagesRead();
   };
 
   if (loading) {
@@ -175,7 +223,7 @@ export default function ChatRoomPage() {
         </div>
       </nav>
 
-      <div className="flex-1 flex max-w-7xl mx-auto w-full">
+      <div className="flex-1 flex max-w-7xl mx-auto w-full relative">
         <div className="flex-1 flex flex-col bg-white m-4 rounded-lg shadow-sm overflow-hidden">
           <div
             ref={messagesContainerRef}
@@ -241,7 +289,7 @@ export default function ChatRoomPage() {
                           </span>
                         )}
                         {message.status === 'sent' && (
-                          <span className="text-xs text-green-500">已发送</span>
+                          <span className="text-xs text-green-500">已送达</span>
                         )}
                         {message.status === 'failed' && (
                           <button
@@ -262,6 +310,18 @@ export default function ChatRoomPage() {
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {unreadCount > 0 && (
+            <button
+              onClick={handleJumpToBottom}
+              className="absolute left-1/2 transform -translate-x-1/2 bottom-24 z-10 bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <span className="text-sm">{unreadCount} 条新消息</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
 
           <div className="border-t border-gray-100 p-4">
             <form onSubmit={handleSend} className="flex gap-3">

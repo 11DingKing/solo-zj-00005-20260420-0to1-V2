@@ -4,6 +4,13 @@ export interface User {
   nickname: string;
 }
 
+export interface RoomLastMessage {
+  id: string;
+  content: string;
+  nickname: string;
+  timestamp: string;
+}
+
 export interface ChatRoom {
   id: string;
   name: string;
@@ -12,6 +19,8 @@ export interface ChatRoom {
   createdBy: string;
   createdAt: string;
   onlineUsers: number;
+  lastMessage?: RoomLastMessage;
+  unreadCount: number;
 }
 
 export interface Message {
@@ -25,7 +34,7 @@ export interface Message {
 
 export interface OptimisticMessage extends Message {
   tempId: string;
-  status: 'sending' | 'sent' | 'failed';
+  status: "sending" | "sent" | "failed";
 }
 
 export interface OnlineUser {
@@ -34,14 +43,14 @@ export interface OnlineUser {
   socketId: string;
 }
 
-export type WebSocketMessage = 
-  | { type: 'join'; roomId: string }
-  | { type: 'leave'; roomId: string }
-  | { type: 'message'; roomId: string; content: string; tempId?: string };
+export type WebSocketMessage =
+  | { type: "join"; roomId: string }
+  | { type: "leave"; roomId: string }
+  | { type: "message"; roomId: string; content: string; tempId?: string };
 
 export type WebSocketResponse =
-  | { type: 'message_ack'; tempId: string; success: boolean; message?: Message }
-  | { type: 'new_message'; message: Message }
-  | { type: 'users_update'; users: OnlineUser[] }
-  | { type: 'history'; messages: Message[] }
-  | { type: 'error'; message: string };
+  | { type: "message_ack"; tempId: string; success: boolean; message?: Message }
+  | { type: "new_message"; message: Message }
+  | { type: "users_update"; users: OnlineUser[] }
+  | { type: "history"; messages: Message[] }
+  | { type: "error"; message: string };
