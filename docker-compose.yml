@@ -48,7 +48,8 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=http://localhost:3001
+      - VITE_PROXY_API_TARGET=http://backend:3001
+      - VITE_PROXY_WS_TARGET=ws://backend:3001
     volumes:
       - ./frontend:/app
       - /app/node_modules

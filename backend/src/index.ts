@@ -34,6 +34,29 @@ app.get("/protected", authMiddleware, (c) => {
   return c.json({ message: "Protected route", user });
 });
 
+async function readBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+function convertHeaders(req: IncomingMessage): Headers {
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        headers.append(key, v);
+      }
+    } else if (value !== undefined) {
+      headers.set(key, value);
+    }
+  }
+  return headers;
+}
+
 async function main() {
   console.log("Starting chat server...");
 
@@ -44,16 +67,29 @@ async function main() {
     async (req: IncomingMessage, res: ServerResponse) => {
       console.log("HTTP request:", req.method, req.url);
       try {
-        const response = await app.fetch(req);
+        const body = await readBody(req);
+        const headers = convertHeaders(req);
+        
+        const protocol = req.socket.encrypted ? "https" : "http";
+        const host = headers.get("host") || "localhost";
+        const url = `${protocol}://${host}${req.url}`;
+
+        const request = new Request(url, {
+          method: req.method,
+          headers,
+          body: req.method !== "GET" && req.method !== "HEAD" && body.length > 0 ? body : undefined,
+        });
+
+        const response = await app.fetch(request);
 
         res.statusCode = response.status;
         response.headers.forEach((value, key) => {
           res.setHeader(key, value);
         });
 
-        const body = await response.text();
+        const responseBody = await response.text();
         console.log("HTTP response:", response.status);
-        res.end(body);
+        res.end(responseBody);
       } catch (error) {
         console.error("Error handling HTTP request:", error);
         res.statusCode = 500;
