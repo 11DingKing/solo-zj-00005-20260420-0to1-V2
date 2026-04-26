@@ -1,4 +1,3 @@
-import { API_URL } from "./api";
 import type { WebSocketMessage, WebSocketResponse } from "../types";
 
 type MessageHandler = (message: WebSocketResponse) => void;
@@ -17,10 +16,8 @@ class WebSocketManager {
   connect(token: string): Promise<void> {
     this.currentToken = token;
     return new Promise((resolve, reject) => {
-      const wsUrl = API_URL.replace("http://", "ws://").replace(
-        "https://",
-        "wss://",
-      );
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}`;
       const url = `${wsUrl}/ws?token=${encodeURIComponent(token)}`;
 
       this.ws = new WebSocket(url);
